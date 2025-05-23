@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EASY資產分配工具</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --secondary: #f4f4f4;
+            --text: #333;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: var(--secondary);
+            color: var(--text);
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            max-width: 960px;
+            margin: auto;
+            padding: 1rem;
+        }
+
+        section {
+            margin-bottom: 2rem;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.25rem;
+        }
+
+        .account-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .account {
+            flex: 1 1 45%;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+            padding: 1rem;
+            position: relative;
+            background-color: #f9f9f9;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        input,
+        select {
+            display: block;
+            width: 95%;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+
+        .results {
+            background: #e0ffe0;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            margin-top: 1rem;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        .instructions {
+            font-size: 0.95rem;
+            background-color: #fff8dc;
+            border-left: 4px solid #ffcc00;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: 0px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .remove-btn:hover {
+            color: #e74c3c;
+        }
+
+        @media (max-width: 600px) {
+            .account {
+                flex: 1 1 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1><i class="fas fa-wallet"></i> 分帳資產配置工具</h1>
+    </header>
+    <main>
+        <section class="instructions">
+            <h2>使用說明</h2>
+            <ul>
+                <li>輸入您的總資產金額 或 您欲配置的收入</li>
+                <li>新增您希望配置的帳戶項目與分配比例（百分比），例如：儲蓄用、夢想用、生活用、投資用、緊急備用金...等</li>
+                <li>點選「計算」按鈕以檢視每個帳戶的金額與比例</li>
+                <li>圖表將視覺化顯示金額分佈，並顯示未分配金額</li>
+                <li>點選「重置頁面」可清除所有設定並回到初始狀態</li>
+                <li>確實根據計算結果設定您的主帳戶在每個月固定轉出金額至您的各個帳戶(主帳戶最好有免轉帳手續費次數)</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>1. 輸入總資產金額</h2>
+            <input type="number" id="totalMoney" placeholder="請輸入您的總金額" />
+        </section>
+
+        <section>
+            <h2>2. 設定帳戶與比例</h2>
+            <div id="accountList" class="account-row"></div>
+            <button onclick="addAccount()"><i class="fas fa-plus"></i> 增加帳戶</button>
+            <button onclick="resetPage()"><i class="fas fa-rotate-left"></i> 重置頁面</button>
+        </section>
+
+        <section>
+            <h2>3. 計算與顯示結果</h2>
+            <button onclick="calculate()"><i class="fas fa-calculator"></i> 計算</button>
+            <div id="results" class="results"></div>
+            <canvas id="chartCanvas"></canvas>
+        </section>
+    </main>
+
+    <script>
+        const accountList = document.getElementById('accountList');
+        let chart;
+
+        function addAccount(name = '', percent = 0) {
+            const div = document.createElement('div');
+            div.className = 'account';
+            div.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">&times;</button>
+        <label>帳戶名稱</label>
+        <input type="text" value="${name}" placeholder="帳戶名稱" />
+        <label>分配比例 (%)</label>
+        <input type="number" value="${percent}" />
+      `;
+            accountList.appendChild(div);
+        }
+
+        function calculate() {
+            const total = parseFloat(document.getElementById('totalMoney').value);
+            const accounts = document.querySelectorAll('#accountList .account');
+            let resultsHTML = '';
+            const labels = [], data = [], colors = [], amounts = [];
+            let totalPercent = 0;
+            let totalAmountUsed = 0;
+
+            if (isNaN(total) || total <= 0) {
+                alert('請輸入有效的總金額');
+                return;
+            }
+
+            accounts.forEach(account => {
+                const name = account.querySelector('input[type="text"]').value;
+                const percent = parseFloat(account.querySelector('input[type="number"]').value);
+
+                if (name && !isNaN(percent)) {
+                    const amount = (total * percent / 100).toFixed(2);
+                    totalPercent += percent;
+                    totalAmountUsed += parseFloat(amount);
+                    resultsHTML += `<p><strong>${name}：</strong> ${amount} 元（${percent}%）</p>`;
+                    labels.push(name);
+                    data.push(amount);
+                    colors.push(`#${Math.floor(Math.random() * 16777215).toString(16)}`);
+                    amounts.push(amount);
+                }
+            });
+
+            const remaining = (total - totalAmountUsed).toFixed(2);
+            const remainingPercent = Math.max(0, (100 - totalPercent).toFixed(2));
+            resultsHTML += `<p><strong>未分配金額：</strong> ${remaining} 元（${remainingPercent}%）</p>`;
+            if (remaining > 0) {
+                labels.push('未分配');
+                data.push(remaining);
+                colors.push('#cccccc');
+                amounts.push(remaining);
+            }
+
+            document.getElementById('results').innerHTML = resultsHTML;
+            renderChart(labels, data, colors, amounts);
+        }
+
+        function renderChart(labels, data, colors, amounts) {
+            const ctx = document.getElementById('chartCanvas').getContext('2d');
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    plugins: {
+                        datalabels: {
+                            color: '#000',
+                            formatter: (value, context) => ` $ ${parseFloat(value).toFixed(2)} `,
+                            font: {
+                                weight: 'bold',
+                                size: 14
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels]
+            });
+        }
+
+        function resetPage() {
+            document.getElementById('totalMoney').value = '';
+            accountList.innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            if (chart) chart.destroy();
+        }
+
+        window.onload = () => {
+            addAccount('生活支出', 30);
+            addAccount('夢想基金', 20);
+            addAccount('緊急備用金', 10);
+            addAccount('投資基金', 10);
+        };
+    </script>
+</body>
+
+</html>
