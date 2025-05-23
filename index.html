@@ -159,6 +159,10 @@
 
         <section>
             <h2>2. 設定帳戶與比例</h2>
+            <div id="totalPercentDisplay"
+                style="margin-bottom: 1rem; padding: 0.5rem; background-color: #f0f0f0; border-radius: 6px;">
+                當前總分配比例：<span id="totalPercent">0</span>%
+            </div>
             <div id="accountList" class="account-row"></div>
             <button onclick="addAccount()"><i class="fas fa-plus"></i> 增加帳戶</button>
             <button onclick="resetPage()"><i class="fas fa-rotate-left"></i> 重置頁面</button>
@@ -180,13 +184,58 @@
             const div = document.createElement('div');
             div.className = 'account';
             div.innerHTML = `
-        <button class="remove-btn" onclick="this.parentElement.remove()">&times;</button>
+        <button class="remove-btn" onclick="this.parentElement.remove(); updateTotalPercent();">&times;</button>
         <label>帳戶名稱</label>
         <input type="text" value="${name}" placeholder="帳戶名稱" />
         <label>分配比例 (%)</label>
-        <input type="number" value="${percent}" />
+        <input type="number" value="${percent}" oninput="handlePercentInput(this)" min="0" max="100" step="0.1" />
       `;
             accountList.appendChild(div);
+            updateTotalPercent();
+        }
+
+        function handlePercentInput(inputElement) {
+            const accounts = document.querySelectorAll('#accountList .account');
+            let totalPercent = 0;
+            let currentInputValue = parseFloat(inputElement.value) || 0;
+
+            // 計算其他帳戶的總和
+            accounts.forEach(account => {
+                const percentInput = account.querySelector('input[type="number"]');
+                if (percentInput !== inputElement) {
+                    totalPercent += parseFloat(percentInput.value) || 0;
+                }
+            });
+
+            // 如果總和超過100%，調整當前輸入值
+            if (totalPercent + currentInputValue > 100) {
+                const newValue = Math.max(0, 100 - totalPercent);
+                inputElement.value = newValue.toFixed(1);
+            }
+
+            updateTotalPercent();
+        }
+
+        function updateTotalPercent() {
+            const accounts = document.querySelectorAll('#accountList .account');
+            let totalPercent = 0;
+
+            accounts.forEach(account => {
+                const percent = parseFloat(account.querySelector('input[type="number"]').value) || 0;
+                totalPercent += percent;
+            });
+
+            const totalPercentElement = document.getElementById('totalPercent');
+            totalPercentElement.textContent = totalPercent.toFixed(1);
+
+            // 根據總百分比更新顯示樣式
+            if (totalPercent > 100) {
+                totalPercentElement.style.color = 'red';
+            } else if (totalPercent === 100) {
+                totalPercentElement.style.color = 'green';
+            } else {
+                totalPercentElement.style.color = 'black';
+            }
         }
 
         function calculate() {
@@ -264,14 +313,16 @@
             document.getElementById('totalMoney').value = '';
             accountList.innerHTML = '';
             document.getElementById('results').innerHTML = '';
+            document.getElementById('totalPercent').textContent = '0';
+            document.getElementById('totalPercent').style.color = 'black';
             if (chart) chart.destroy();
         }
 
         window.onload = () => {
-            addAccount('生活支出', 30);
-            addAccount('夢想基金', 20);
-            addAccount('緊急備用金', 10);
-            addAccount('投資基金', 10);
+            addAccount('生活支出', 0);
+            addAccount('夢想基金', 0);
+            addAccount('緊急備用金', 0);
+            addAccount('投資基金', 0);
         };
     </script>
 </body>
